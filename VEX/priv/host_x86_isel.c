@@ -1409,6 +1409,32 @@ static HReg iselIntExpr_R_wrk ( ISelEnv* env, const IRExpr* e )
             return dst;
          }
 
+         case Iop_GetMSBs8x16: {
+            /* We can use SSE2 instructions for this. */
+            /* Note: the following assumes the helper is of signature
+                  UInt fn ( ULong w64hi, ULong w64Lo ),
+               and is not a regparm fn. */
+            HReg dst = newVRegI(env);
+            HReg vec = iselVecExpr(env, e->Iex.Unop.arg);
+            HReg vecSwapped = newVRegV(env);
+            HWord fn = (HWord)h_generic_calc_GetMSBs8x16;
+            X86AMode* esp0 = X86AMode_IR(0, hregX86_ESP());
+
+            vassert(env->hwcaps & VEX_HWCAPS_X86_SSE2);
+
+            /* Swap halves so that lo 64 bits end up in the second stack
+             * parameter, i.e. higher in stack. */
+            addInstr(env, X86Instr_SseShuf(0x4E, vec, vecSwapped));
+
+            sub_from_esp(env, 16);
+            addInstr(env, X86Instr_SseLdSt(False/*store*/, vecSwapped, esp0));
+            addInstr(env, X86Instr_Call( Xcc_ALWAYS, (Addr32)fn,
+                                         0, mk_RetLoc_simple(RLPri_Int) ));
+            add_to_esp(env, 16);
+            addInstr(env, mk_iMOVsd_RR(hregX86_EAX(), dst));
+            return dst;
+         }
+
          default: 
             break;
       }
@@ -2695,15 +2721,32 @@ static void iselInt64Expr_wrk ( HReg* rHi, HReg* rLo, ISelEnv* env,
             return;
          }
 
-         /* 16Uto64(e) */
+         case Iop_8Uto64:
          case Iop_16Uto64: {
             HReg tLo = newVRegI(env);
             HReg tHi = newVRegI(env);
             HReg src = iselIntExpr_R(env, e->Iex.Unop.arg);
+            UInt mask = e->Iex.Unop.op==Iop_16Uto64 ? 0xFFFF : 0xFF;
             addInstr(env, mk_iMOVsd_RR(src,tLo));
             addInstr(env, X86Instr_Alu32R(Xalu_AND,
-                                          X86RMI_Imm(0xFFFF), tLo));
+                                          X86RMI_Imm(mask), tLo));
             addInstr(env, X86Instr_Alu32R(Xalu_MOV, X86RMI_Imm(0), tHi));
+            *rHi = tHi;
+            *rLo = tLo;
+            return;
+         }
+
+         case Iop_8Sto64:
+         case Iop_16Sto64: {
+            HReg tLo = newVRegI(env);
+            HReg tHi = newVRegI(env);
+            HReg src = iselIntExpr_R(env, e->Iex.Unop.arg);
+            UInt amt = e->Iex.Unop.op==Iop_16Sto64 ? 16 : 24;
+            addInstr(env, mk_iMOVsd_RR(src,tLo));
+            addInstr(env, X86Instr_Sh32(Xsh_SHL, amt, tLo));
+            addInstr(env, X86Instr_Sh32(Xsh_SAR, amt, tLo));
+            addInstr(env, mk_iMOVsd_RR(tLo,tHi));
+            addInstr(env, X86Instr_Sh32(Xsh_SAR, 31, tHi));
             *rHi = tHi;
             *rLo = tLo;
             return;
@@ -3797,6 +3840,42 @@ static HReg iselVecExpr_wrk ( ISelEnv* env, const IRExpr* e )
          return dst;
       }
 
+      case Iop_Mul32x4:
+         fn = (HWord)h_generic_calc_Mul32x4;
+         goto do_SseAssistedBinary;
+      case Iop_Max32Sx4:
+         fn = (HWord)h_generic_calc_Max32Sx4;
+         goto do_SseAssistedBinary;
+      case Iop_Min32Sx4:
+         fn = (HWord)h_generic_calc_Min32Sx4;
+         goto do_SseAssistedBinary;
+      case Iop_Max32Ux4:
+         fn = (HWord)h_generic_calc_Max32Ux4;
+         goto do_SseAssistedBinary;
+      case Iop_Min32Ux4:
+         fn = (HWord)h_generic_calc_Min32Ux4;
+         goto do_SseAssistedBinary;
+      case Iop_Max16Ux8:
+         fn = (HWord)h_generic_calc_Max16Ux8;
+         goto do_SseAssistedBinary;
+      case Iop_Min16Ux8:
+         fn = (HWord)h_generic_calc_Min16Ux8;
+         goto do_SseAssistedBinary;
+      case Iop_Max8Sx16:
+         fn = (HWord)h_generic_calc_Max8Sx16;
+         goto do_SseAssistedBinary;
+      case Iop_Min8Sx16:
+         fn = (HWord)h_generic_calc_Min8Sx16;
+         goto do_SseAssistedBinary;
+      case Iop_CmpEQ64x2:
+         fn = (HWord)h_generic_calc_CmpEQ64x2;
+         goto do_SseAssistedBinary;
+      case Iop_CmpGT64Sx2:
+         fn = (HWord)h_generic_calc_CmpGT64Sx2;
+         goto do_SseAssistedBinary;
+      case Iop_QNarrowBin32Sto16Ux8:
+         fn = (HWord)h_generic_calc_QNarrowBin32Sto16Ux8;
+         goto do_SseAssistedBinary;
       case Iop_NarrowBin32to16x8:
          fn = (HWord)h_generic_calc_NarrowBin32to16x8;
          goto do_SseAssistedBinary;
@@ -3839,6 +3918,56 @@ static HReg iselVecExpr_wrk ( ISelEnv* env, const IRExpr* e )
                                         X86AMode_IR(0, hregX86_EDX())));
          addInstr(env, X86Instr_SseLdSt(False/*!isLoad*/, argR,
                                         X86AMode_IR(0, hregX86_ECX())));
+         /* call the helper */
+         addInstr(env, X86Instr_Call( Xcc_ALWAYS, (Addr32)fn,
+                                      3, mk_RetLoc_simple(RLPri_None) ));
+         /* fetch the result from memory, using %r_argp, which the
+            register allocator will keep alive across the call. */
+         addInstr(env, X86Instr_SseLdSt(True/*isLoad*/, dst,
+                                        X86AMode_IR(0, argp)));
+         /* and finally, clear the space */
+         add_to_esp(env, 112);
+         return dst;
+      }
+      case Iop_SarN64x2:
+         fn = (HWord)h_generic_calc_SarN64x2;
+         goto do_SseAssistedVectorAndScalar;
+      case Iop_SarN8x16:
+         fn = (HWord)h_generic_calc_SarN8x16;
+         goto do_SseAssistedVectorAndScalar;
+      do_SseAssistedVectorAndScalar: {
+         /* As with the amd64 case (where this is copied from) we
+            generate pretty bad code. */
+         vassert(fn != 0);
+         HReg dst = newVRegV(env);
+         HReg argL = iselVecExpr(env, e->Iex.Binop.arg1);
+         HReg argR = iselIntExpr_R(env, e->Iex.Binop.arg2);
+         HReg argp = newVRegI(env);
+         /* subl $112, %esp         -- make a space */
+         sub_from_esp(env, 112);
+         /* leal 48(%esp), %r_argp  -- point into it */
+         addInstr(env, X86Instr_Lea32(X86AMode_IR(48, hregX86_ESP()),
+                                      argp));
+         /* andl $-16, %r_argp      -- 16-align the pointer */
+         addInstr(env, X86Instr_Alu32R(Xalu_AND,
+                                       X86RMI_Imm( ~(UInt)15 ), 
+                                       argp));
+         /* Prepare 2 vector arg regs:
+            leaq 0(%r_argp), %rdi
+            leaq 16(%r_argp), %rsi
+         */
+         addInstr(env, X86Instr_Lea32(X86AMode_IR(0, argp),
+                                      hregX86_EAX()));
+         addInstr(env, X86Instr_Lea32(X86AMode_IR(16, argp),
+                                      hregX86_EDX()));
+         /* Store the vector arg, at (%rsi):
+            movupd  %argL, 0(%rsi)
+         */
+         addInstr(env, X86Instr_SseLdSt(False/*!isLoad*/, argL,
+                                        X86AMode_IR(0, hregX86_EDX())));
+         /* And get the scalar value into ecx */
+         addInstr(env, mk_iMOVsd_RR(argR, hregX86_ECX()));
+
          /* call the helper */
          addInstr(env, X86Instr_Call( Xcc_ALWAYS, (Addr32)fn,
                                       3, mk_RetLoc_simple(RLPri_None) ));

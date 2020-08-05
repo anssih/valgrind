@@ -1,0 +1,4 @@
+prog: sse4
+prereq: ../../../tests/x86_amd64_features x86-sse42
+vgopts: -q
+stdout_filter: filter_inf_nan

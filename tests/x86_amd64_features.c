@@ -101,6 +101,9 @@ static Bool go(char* cpu)
      level = 0x80000001;
      cmask = 1 << 5;
      require_amd = True;
+   } else if ( strcmp( cpu, "x86-sse42" ) == 0 ) {
+     level = 1;
+     cmask = 1 << 20;
 #if defined(VGA_amd64)
    } else if ( strcmp( cpu, "amd64-sse3" ) == 0 ) {
      level = 1;

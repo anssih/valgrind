@@ -2724,6 +2724,265 @@ ULong x86g_calculate_mmx_psadbw ( ULong xx, ULong yy )
    return (ULong)t;
 }
 
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong x86g_calculate_sse_phminposuw ( ULong sLo, ULong sHi )
+{
+   UShort t, min;
+   UInt   idx;
+   t = sel16x4_0(sLo); if (True)    { min = t; idx = 0; }
+   t = sel16x4_1(sLo); if (t < min) { min = t; idx = 1; }
+   t = sel16x4_2(sLo); if (t < min) { min = t; idx = 2; }
+   t = sel16x4_3(sLo); if (t < min) { min = t; idx = 3; }
+   t = sel16x4_0(sHi); if (t < min) { min = t; idx = 4; }
+   t = sel16x4_1(sHi); if (t < min) { min = t; idx = 5; }
+   t = sel16x4_2(sHi); if (t < min) { min = t; idx = 6; }
+   t = sel16x4_3(sHi); if (t < min) { min = t; idx = 7; }
+   return ((ULong)(idx << 16)) | ((ULong)min);
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32b ( UInt crcIn, UInt b )
+{
+   UInt i;
+   UInt crc = (b & 0xFFUL) ^ crcIn;
+   for (i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78UL : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32w ( UInt crcIn, UInt w )
+{
+   UInt i;
+   UInt crc = (w & 0xFFFFUL) ^ crcIn;
+   for (i = 0; i < 16; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78UL : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+UInt x86g_calc_crc32l ( UInt crcIn, UInt l )
+{
+   UInt i;
+   UInt crc = (l & 0xFFFFFFFFUL) ^ crcIn;
+   for (i = 0; i < 32; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78UL : 0);
+   return crc;
+}
+
+/* .. helper for next fn .. */
+static inline ULong sad_8x4 ( ULong xx, ULong yy )
+{
+   UInt t = 0;
+   t += (UInt)abdU8( sel8x8_3(xx), sel8x8_3(yy) );
+   t += (UInt)abdU8( sel8x8_2(xx), sel8x8_2(yy) );
+   t += (UInt)abdU8( sel8x8_1(xx), sel8x8_1(yy) );
+   t += (UInt)abdU8( sel8x8_0(xx), sel8x8_0(yy) );
+   return (ULong)t;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong x86g_calc_mpsadbw ( ULong sHi, ULong sLo,
+                          ULong dHi, ULong dLo,
+                          ULong imm_and_return_control_bit )
+{
+   UInt imm8     = imm_and_return_control_bit & 7;
+   Bool calcHi   = (imm_and_return_control_bit >> 7) & 1;
+   UInt srcOffsL = imm8 & 3; /* src offs in 32-bit (L) chunks */
+   UInt dstOffsL = (imm8 >> 2) & 1; /* dst offs in ditto chunks */
+   /* For src we only need 32 bits, so get them into the
+      lower half of a 64 bit word. */
+   ULong src = ((srcOffsL & 2) ? sHi : sLo) >> (32 * (srcOffsL & 1));
+   /* For dst we need to get hold of 56 bits (7 bytes) from a total of
+      11 bytes.  If calculating the low part of the result, need bytes
+      dstOffsL * 4 + (0 .. 6); if calculating the high part,
+      dstOffsL * 4 + (4 .. 10). */
+   ULong dst;
+   /* dstOffL = 0, Lo  ->  0 .. 6
+      dstOffL = 1, Lo  ->  4 .. 10
+      dstOffL = 0, Hi  ->  4 .. 10
+      dstOffL = 1, Hi  ->  8 .. 14
+   */
+   if (calcHi && dstOffsL) {
+      /* 8 .. 14 */
+      dst = dHi & 0x00FFFFFFFFFFFFFFULL;
+   }
+   else if (!calcHi && !dstOffsL) {
+      /* 0 .. 6 */
+      dst = dLo & 0x00FFFFFFFFFFFFFFULL;
+   } 
+   else {
+      /* 4 .. 10 */
+      dst = (dLo >> 32) | ((dHi & 0x00FFFFFFULL) << 32);
+   }
+   ULong r0  = sad_8x4( dst >>  0, src );
+   ULong r1  = sad_8x4( dst >>  8, src );
+   ULong r2  = sad_8x4( dst >> 16, src );
+   ULong r3  = sad_8x4( dst >> 24, src );
+   ULong res = (r3 << 48) | (r2 << 32) | (r1 << 16) | r0;
+   return res;
+}
+
+
+/*---------------------------------------------------------------*/
+/*--- Helpers for SSE4.2 PCMP{E,I}STR{I,M}                    ---*/
+/*---------------------------------------------------------------*/
+
+static UInt zmask_from_V128 ( V128* arg )
+{
+   UInt i, res = 0;
+   for (i = 0; i < 16; i++) {
+      res |=  ((arg->w8[i] == 0) ? 1 : 0) << i;
+   }
+   return res;
+}
+
+static UInt zmask_from_V128_wide ( V128* arg )
+{
+   UInt i, res = 0;
+   for (i = 0; i < 8; i++) {
+      res |=  ((arg->w16[i] == 0) ? 1 : 0) << i;
+   }
+   return res;
+}
+
+/* Helps with PCMP{I,E}STR{I,M}.
+
+   CALLED FROM GENERATED CODE: DIRTY HELPER(s).  (But not really,
+   actually it could be a clean helper, but for the fact that we can't
+   pass by value 2 x V128 to a clean helper, nor have one returned.)
+   Reads guest state, writes to guest state for the xSTRM cases, no
+   accesses of memory, is a pure function.
+
+   opc_and_imm contains (4th byte of opcode << 8) | the-imm8-byte so
+   the callee knows which I/E and I/M variant it is dealing with and
+   what the specific operation is.  4th byte of opcode is in the range
+   0x60 to 0x63:
+       istri  66 0F 3A 63
+       istrm  66 0F 3A 62
+       estri  66 0F 3A 61
+       estrm  66 0F 3A 60
+
+   gstOffL and gstOffR are the guest state offsets for the two XMM
+   register inputs.  We never have to deal with the memory case since
+   that is handled by pre-loading the relevant value into the fake
+   XMM16 register.
+
+   For ESTRx variants, edxIN and eaxIN hold the values of those two
+   registers.
+
+   In all cases, the bottom 16 bits of the result contain the new
+   OSZACP %rflags values.  For xSTRI variants, bits[31:16] of the
+   result hold the new %ecx value.  For xSTRM variants, the helper
+   writes the result directly to the guest XMM0.
+
+   Declarable side effects: in all cases, reads guest state at
+   [gstOffL, +16) and [gstOffR, +16).  For xSTRM variants, also writes
+   guest_XMM0.
+
+   Is expected to be called with opc_and_imm combinations which have
+   actually been validated, and will assert if otherwise.  The front
+   end should ensure we're only called with verified values.
+*/
+ULong x86g_dirtyhelper_PCMPxSTRx ( 
+          VexGuestX86State* gst,
+          HWord opc4_and_imm,
+          HWord gstOffL, HWord gstOffR,
+          HWord edxIN, HWord eaxIN
+       )
+{
+   HWord opc4 = (opc4_and_imm >> 8) & 0xFF;
+   HWord imm8 = opc4_and_imm & 0xFF;
+   HWord isISTRx = opc4 & 2;
+   HWord isxSTRM = (opc4 & 1) ^ 1;
+   vassert((opc4 & 0xFC) == 0x60); /* 0x60 .. 0x63 */
+   HWord wide = (imm8 & 1);
+
+   // where the args are
+   V128* argL = (V128*)( ((UChar*)gst) + gstOffL );
+   V128* argR = (V128*)( ((UChar*)gst) + gstOffR );
+
+   /* Create the arg validity masks, either from the vectors
+      themselves or from the supplied edx/eax values. */
+   // FIXME: this is only right for the 8-bit data cases.
+   // At least that is asserted above.
+   UInt zmaskL, zmaskR;
+
+   // temp spot for the resulting flags and vector.
+   V128 resV;
+   UInt resOSZACP;
+
+   // for checking whether case was handled
+   Bool ok = False;
+
+   if (wide) {
+      if (isISTRx) {
+         zmaskL = zmask_from_V128_wide(argL);
+         zmaskR = zmask_from_V128_wide(argR);
+      } else {
+         Int tmp;
+         tmp = edxIN & 0xFFFFFFFF;
+         if (tmp < -8) tmp = -8;
+         if (tmp > 8)  tmp = 8;
+         if (tmp < 0)  tmp = -tmp;
+         vassert(tmp >= 0 && tmp <= 8);
+         zmaskL = (1 << tmp) & 0xFF;
+         tmp = eaxIN & 0xFFFFFFFF;
+         if (tmp < -8) tmp = -8;
+         if (tmp > 8)  tmp = 8;
+         if (tmp < 0)  tmp = -tmp;
+         vassert(tmp >= 0 && tmp <= 8);
+         zmaskR = (1 << tmp) & 0xFF;
+      }
+      // do the meyaath
+      ok = compute_PCMPxSTRx_wide ( 
+              &resV, &resOSZACP, argL, argR, 
+              zmaskL, zmaskR, imm8, (Bool)isxSTRM
+           );
+   } else {
+      if (isISTRx) {
+         zmaskL = zmask_from_V128(argL);
+         zmaskR = zmask_from_V128(argR);
+      } else {
+         Int tmp;
+         tmp = edxIN & 0xFFFFFFFF;
+         if (tmp < -16) tmp = -16;
+         if (tmp > 16)  tmp = 16;
+         if (tmp < 0)   tmp = -tmp;
+         vassert(tmp >= 0 && tmp <= 16);
+         zmaskL = (1 << tmp) & 0xFFFF;
+         tmp = eaxIN & 0xFFFFFFFF;
+         if (tmp < -16) tmp = -16;
+         if (tmp > 16)  tmp = 16;
+         if (tmp < 0)   tmp = -tmp;
+         vassert(tmp >= 0 && tmp <= 16);
+         zmaskR = (1 << tmp) & 0xFFFF;
+      }
+      // do the meyaath
+      ok = compute_PCMPxSTRx ( 
+              &resV, &resOSZACP, argL, argR, 
+              zmaskL, zmaskR, imm8, (Bool)isxSTRM
+           );
+   }
+
+   // front end shouldn't pass us any imm8 variants we can't
+   // handle.  Hence:
+   vassert(ok);
+
+   // So, finally we need to get the results back to the caller.
+   // In all cases, the new OSZACP value is the lowest 16 of
+   // the return value.
+   if (isxSTRM) {
+      gst->guest_XMM0[0] = resV.w32[0];
+      gst->guest_XMM0[1] = resV.w32[1];
+      gst->guest_XMM0[2] = resV.w32[2];
+      gst->guest_XMM0[3] = resV.w32[3];
+      return resOSZACP & 0x8D5;
+   } else {
+      UInt newECX = resV.w32[0] & 0xFFFF;
+      return (newECX << 16) | (resOSZACP & 0x8D5);
+   }
+}
 
 /*---------------------------------------------------------------*/
 /*--- Helpers for dealing with segment overrides.             ---*/

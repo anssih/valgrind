@@ -12,6 +12,8 @@ support for X86/macOS 10.13, AMD64/macOS 10.13 and nanoMIPS/Linux.
 
 * ==================== CORE CHANGES ===================
 
+* x86: Support for SSE4 in 32-bit mode has been added.
+
 * ==================== TOOL CHANGES ====================
 
 * DHAT:
@@ -39,8 +41,14 @@ To see details of a given bug, visit
   https://bugs.kde.org/show_bug.cgi?id=XXXXXX
 where XXXXXX is the bug number as listed below.
 
+254616  unknown instruction and aborts on Mac OS X 10.6.4 [..]
+276780  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0x22
+291924  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x38 0x31 (pmovzxbd)
 345077  linux syscall execveat support (linux 3.19)
+346023  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0xB (roundsd)
+347198  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0x63 (pcmpistri)
 369029  handle linux syscalls sched_getattr and sched_setattr
+404069  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0x22
 n-i-bz  helgrind: If hg_cli__realloc fails, return NULL.
 
 422623  epoll_ctl warns for uninitialized padding on non-amd64 64bit arches

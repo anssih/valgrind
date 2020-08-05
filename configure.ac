@@ -2830,9 +2830,9 @@ AC_MSG_CHECKING([if x86/amd64 assembler speaks SSE4.2])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[
   do { long long int x; 
    __asm__ __volatile__(
-      "crc32q %%r15,%%r15" : : : "r15" );
+      "crc32l %%ecx,%%ecx" : : : "ecx" );
    __asm__ __volatile__(
-      "pblendvb (%%rcx), %%xmm11" : : : "memory", "xmm11"); 
+      "pblendvb 0, %%xmm7" : : : "memory", "xmm7"); 
    __asm__ __volatile__(
       "aesdec %%xmm2, %%xmm1" : : : "xmm2", "xmm1"); }
   while (0)

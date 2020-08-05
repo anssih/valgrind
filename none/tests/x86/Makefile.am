@@ -47,6 +47,7 @@ EXTRA_DIST = \
 	cet_nops.stderr.exp cet_nops.stdout.exp cet_nops.vgtest \
 	cmpxchg8b.stderr.exp cmpxchg8b.stdout.exp cmpxchg8b.vgtest \
 	cpuid.stderr.exp cpuid.stdout.exp cpuid.vgtest \
+	crc32.vgtest crc32.stdout.exp crc32.stderr.exp \
 	cse_fail.stderr.exp cse_fail.stdout.exp cse_fail.vgtest \
 	faultstatus.disabled faultstatus.stderr.exp \
 	fcmovnu.vgtest fcmovnu.stderr.exp fcmovnu.stdout.exp \
@@ -71,12 +72,21 @@ EXTRA_DIST = \
 	lzcnt32.stderr.exp lzcnt32.stdout.exp lzcnt32.vgtest \
 	movx.stderr.exp movx.stdout.exp movx.vgtest \
 	movbe.stderr.exp movbe.stdout.exp movbe.vgtest \
+	pcmpstr.stderr.exp pcmpstr.stdout.exp \
+	pcmpstr.vgtest \
+	pcmpstrw.stderr.exp pcmpstrw.stdout.exp \
+	pcmpstrw.vgtest \
+	pcmpxstrx.stderr.exp pcmpxstrx.stdout.exp \
+	pcmpxstrx.vgtest \
+	pcmpxstrxw.stderr.exp pcmpxstrxw.stdout.exp \
+	pcmpxstrxw.vgtest \
 	pushpopseg.stderr.exp pushpopseg.stdout.exp pushpopseg.vgtest \
 	sbbmisc.stderr.exp sbbmisc.stdout.exp sbbmisc.vgtest \
 	shift_ndep.stderr.exp shift_ndep.stdout.exp shift_ndep.vgtest \
 	smc1.stderr.exp smc1.stdout.exp smc1.vgtest \
 	ssse3_misaligned.stderr.exp ssse3_misaligned.stdout.exp \
 	ssse3_misaligned.vgtest ssse3_misaligned.c \
+	sse4.stderr.exp sse4.stdout.exp sse4.vgtest \
 	x86locked.vgtest x86locked.stdout.exp x86locked.stderr.exp \
 	x87trigOOR.vgtest x87trigOOR.stdout.exp x87trigOOR.stderr.exp \
 	yield.stderr.exp yield.stdout.exp yield.disabled \
@@ -125,6 +135,11 @@ if BUILD_LZCNT_TESTS
 endif
 if BUILD_MOVBE_TESTS
  check_PROGRAMS += movbe
+endif
+if BUILD_SSE42_TESTS
+ check_PROGRAMS += \
+	pcmpstr pcmpxstrx sse4 crc32 \
+	pcmpstrw pcmpxstrxw
 endif
 if !VGCONF_OS_IS_DARWIN
 if !SOLARIS_SUN_STUDIO_AS
