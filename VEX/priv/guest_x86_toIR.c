@@ -10184,6 +10184,33 @@ static Int dis_EXTRACTPS ( UChar sorb, Int delta )
 }
 
 
+static IRTemp math_PCLMULQDQ( IRTemp dV, IRTemp sV, UInt imm8 )
+{
+   IRTemp t0 = newTemp(Ity_I64);
+   IRTemp t1 = newTemp(Ity_I64);
+   assign(t0, unop((imm8&1)? Iop_V128HIto64 : Iop_V128to64, 
+              mkexpr(dV)));
+   assign(t1, unop((imm8&16) ? Iop_V128HIto64 : Iop_V128to64,
+              mkexpr(sV)));
+
+   IRTemp t2 = newTemp(Ity_I64);
+   IRTemp t3 = newTemp(Ity_I64);
+
+   IRExpr** args;
+
+   args = mkIRExprVec_3(mkexpr(t0), mkexpr(t1), mkU64(0));
+   assign(t2, mkIRExprCCall(Ity_I64,0, "x86g_calculate_pclmul",
+                            &x86g_calculate_pclmul, args));
+   args = mkIRExprVec_3(mkexpr(t0), mkexpr(t1), mkU64(1));
+   assign(t3, mkIRExprCCall(Ity_I64,0, "x86g_calculate_pclmul",
+                            &x86g_calculate_pclmul, args));
+
+   IRTemp res     = newTemp(Ity_V128);
+   assign(res, binop(Iop_64HLtoV128, mkexpr(t3), mkexpr(t2)));
+   return res;
+}
+
+
 __attribute__((noinline))
 static
 Int dis_ESC_0F3A__SSE4 ( Bool* decode_OK,
@@ -10722,6 +10749,43 @@ Int dis_ESC_0F3A__SSE4 ( Bool* decode_OK,
          }
 
          putXMMReg( rG, mkexpr( math_MPSADBW_128(dst_vec, src_vec, imm8) ) );
+         goto decode_success;
+      }
+      break;
+
+   case 0x44:
+      /* 66 0F 3A 44 /r ib = PCLMULQDQ xmm1, xmm2/m128, imm8
+       * Carry-less multiplication of selected XMM quadwords into XMM
+       * registers (a.k.a multiplication of polynomials over GF(2))
+       */
+      if (sz == 2) {
+  
+         Int imm8;
+         IRTemp svec = newTemp(Ity_V128);
+         IRTemp dvec = newTemp(Ity_V128);
+         modrm       = getUChar(delta);
+         UInt   rG   = gregOfRM(modrm);
+
+         assign( dvec, getXMMReg(rG) );
+  
+         if ( epartIsReg( modrm ) ) {
+            UInt rE = eregOfRM(modrm);
+            imm8 = (Int)getUChar(delta+1);
+            assign( svec, getXMMReg(rE) );
+            delta += 1+1;
+            DIP( "pclmulqdq $%d, %s,%s\n", imm8,
+                 nameXMMReg(rE), nameXMMReg(rG) );    
+         } else {
+            addr = disAMode( &alen, sorb, delta, dis_buf );
+            gen_SEGV_if_not_16_aligned( addr );
+            assign( svec, loadLE( Ity_V128, mkexpr(addr) ) );
+            imm8 = (Int)getUChar(delta+alen);
+            delta += alen+1;
+            DIP( "pclmulqdq $%d, %s,%s\n", 
+                 imm8, dis_buf, nameXMMReg(rG) );
+         }
+
+         putXMMReg( rG, mkexpr( math_PCLMULQDQ(dvec, svec, imm8) ) );
          goto decode_success;
       }
       break;

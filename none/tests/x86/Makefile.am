@@ -19,6 +19,9 @@ if !SOLARIS_SUN_STUDIO_AS
 endif
 endif
 endif
+if BUILD_PCLMULQDQ_TESTS
+ INSN_TESTS += insn_pclmulqdq
+endif
 
 if !SOLARIS_SUN_STUDIO_AS
 # Sun Studio assembler fails to build some tests (illegal mnemonic).
@@ -62,6 +65,8 @@ EXTRA_DIST = \
 	$(addsuffix .stderr.exp,$(INSN_TESTS)) \
 	$(addsuffix .stdout.exp,$(INSN_TESTS)) \
 	$(addsuffix .vgtest,$(INSN_TESTS)) \
+	insn_pclmulqdq.vgtest insn_pclmulqdq.stdout.exp \
+	insn_pclmulqdq.stderr.exp \
 	insn_fpu.stdout.exp insn_fpu.stderr.exp insn_fpu.vgtest \
 	insn_sse.stdout.exp insn_sse.stderr.exp insn_sse.vgtest \
 	insn_sse2.stdout.exp insn_sse2.stderr.exp insn_sse2.vgtest \
@@ -196,6 +201,7 @@ insn_sse3_SOURCES	= insn_sse3.def
 insn_sse3_LDADD		= -lm
 insn_ssse3_SOURCES	= insn_ssse3.def
 insn_ssse3_LDADD	= -lm
+insn_pclmulqdq_SOURCES  = insn_pclmulqdq.def
 x86locked_CFLAGS	= $(AM_CFLAGS) -O
 yield_LDADD		= -lpthread
 

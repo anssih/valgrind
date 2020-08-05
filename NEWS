@@ -12,7 +12,7 @@ support for X86/macOS 10.13, AMD64/macOS 10.13 and nanoMIPS/Linux.
 
 * ==================== CORE CHANGES ===================
 
-* x86: Support for SSE4, AES in 32-bit mode has been added.
+* x86: Support for SSE4, AES, PCLMUL in 32-bit mode has been added.
 
 * ==================== TOOL CHANGES ====================
 

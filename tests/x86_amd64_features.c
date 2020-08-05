@@ -94,6 +94,9 @@ static Bool go(char* cpu)
    } else if ( strcmp( cpu, "x86-sse3" ) == 0 ) {
      level = 1;
      cmask = 1 << 0;
+   } else if ( strcmp( cpu, "x86-pclmulqdq" ) == 0 ) {
+     level = 1;
+     cmask = 1 << 1;
    } else if ( strcmp( cpu, "x86-ssse3" ) == 0 ) {
      level = 1;
      cmask = 1 << 9;

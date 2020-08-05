@@ -110,6 +110,8 @@ extern UInt x86g_calculate_daa_das_aaa_aas ( UInt AX_and_flags, UInt opcode );
 
 extern UInt x86g_calculate_aad_aam ( UInt AX_and_flags, UInt opcode );
 
+extern ULong x86g_calculate_pclmul(ULong s1, ULong s2, ULong which);
+
 extern ULong x86g_check_fldcw ( UInt fpucw );
 
 extern UInt  x86g_create_fpucw ( UInt fpround );
