@@ -214,6 +214,56 @@ extern ULong x86g_dirtyhelper_PCMPxSTRx (
           HWord edxIN, HWord eaxIN
        );
 
+/* Implementation of intel AES instructions as described in
+   Intel  Advanced Vector Extensions
+          Programming Reference
+          MARCH 2008
+          319433-002.
+
+   CALLED FROM GENERATED CODE: DIRTY HELPER(s).  (But not really,
+   actually it could be a clean helper, but for the fact that we can't
+   pass by value 2 x V128 to a clean helper, nor have one returned.)
+   Reads guest state, writes to guest state, no
+   accesses of memory, is a pure function.
+
+   opc4 contains the 4th byte of opcode. Front-end should only
+   give opcode corresponding to AESENC/AESENCLAST/AESDEC/AESDECLAST/AESIMC.
+   (will assert otherwise).
+
+   gstOffL and gstOffR are the guest state offsets for the two XMM
+   register inputs, gstOffD is the guest state offset for the XMM register
+   output.  We never have to deal with the memory case since that is handled
+   by pre-loading the relevant value into the fake XMM16 register.
+
+*/
+extern void x86g_dirtyhelper_AES ( 
+          VexGuestX86State* gst,
+          HWord opc4, HWord gstOffD,
+          HWord gstOffL, HWord gstOffR
+       );
+
+/* Implementation of AESKEYGENASSIST. 
+
+   CALLED FROM GENERATED CODE: DIRTY HELPER(s).  (But not really,
+   actually it could be a clean helper, but for the fact that we can't
+   pass by value 1 x V128 to a clean helper, nor have one returned.)
+   Reads guest state, writes to guest state, no
+   accesses of memory, is a pure function.
+
+   imm8 is the Round Key constant.
+
+   gstOffL and gstOffR are the guest state offsets for the two XMM
+   register input and output.  We never have to deal with the memory case since
+   that is handled by pre-loading the relevant value into the fake
+   XMM16 register.
+
+*/
+extern void x86g_dirtyhelper_AESKEYGENASSIST ( 
+          VexGuestX86State* gst,
+          HWord imm8,
+          HWord gstOffL, HWord gstOffR
+       );
+
 extern VexEmNote
             x86g_dirtyhelper_FXRSTOR ( VexGuestX86State*, HWord );
 

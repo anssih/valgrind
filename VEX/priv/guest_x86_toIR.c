@@ -8785,6 +8785,149 @@ static IRTemp math_PMULDQ_128 ( IRTemp dV, IRTemp sV )
 }
 
 
+static Int dis_AESx ( UChar sorb,
+                      Int delta, UChar opc )
+{
+   IRTemp addr   = IRTemp_INVALID;
+   Int    alen   = 0;
+   HChar  dis_buf[50];
+   UChar  modrm  = getUChar(delta);
+   UInt   rG     = gregOfRM(modrm);
+   UInt   regNoL = 0;
+   UInt   regNoR = rG;
+
+   /* This is a nasty kludge.  We need to pass 2 x V128 to the
+      helper.  Since we can't do that, use a dirty
+      helper to compute the results directly from the XMM regs in
+      the guest state.  That means for the memory case, we need to
+      move the left operand into a pseudo-register (XMM16, let's
+      call it). */
+   if (epartIsReg(modrm)) {
+      regNoL = eregOfRM(modrm);
+      delta += 1;
+   } else {
+      regNoL = 16; /* use XMM16 as an intermediary */
+      addr = disAMode( &alen, sorb, delta, dis_buf );
+      /* alignment check needed ???? */
+      stmt( IRStmt_Put( OFFB_XMM16, loadLE(Ity_V128, mkexpr(addr)) ));
+      delta += alen;
+   }
+
+   void*  fn = &x86g_dirtyhelper_AES;
+   const HChar* nm = "x86g_dirtyhelper_AES";
+
+   /* Round up the arguments.  Note that this is a kludge -- the
+      use of mkU32 rather than mkIRExpr_HWord implies the
+      assumption that the host's word size is 32-bit. */
+   UInt gstOffD = xmmGuestRegOffset(rG);
+   UInt gstOffL = regNoL == 16 ? OFFB_XMM16 : xmmGuestRegOffset(regNoL);
+   UInt gstOffR = xmmGuestRegOffset(regNoR);
+   IRExpr*  opc4         = mkU32(opc);
+   IRExpr*  gstOffDe     = mkU32(gstOffD);
+   IRExpr*  gstOffLe     = mkU32(gstOffL);
+   IRExpr*  gstOffRe     = mkU32(gstOffR);
+   IRExpr** args
+      = mkIRExprVec_5( IRExpr_GSPTR(), opc4, gstOffDe, gstOffLe, gstOffRe );
+
+   IRDirty* d    = unsafeIRDirty_0_N( 0/*regparms*/, nm, fn, args );
+   /* It's not really a dirty call, but we can't use the clean helper
+      mechanism here for the very lame reason that we can't pass 2 x
+      V128s by value to a helper.  Hence this roundabout scheme. */
+   d->nFxState = 2;
+   vex_bzero(&d->fxState, sizeof(d->fxState));
+   /* AES{ENC,ENCLAST,DEC,DECLAST} read both registers, and writes
+      the second.
+      AESIMC (0xDB) reads the first register, and writes the second. */
+   d->fxState[0].fx     = Ifx_Read;
+   d->fxState[0].offset = gstOffL;
+   d->fxState[0].size   = sizeof(U128);
+   d->fxState[1].offset = gstOffR;
+   d->fxState[1].size   = sizeof(U128);
+   if (opc == 0xDB)
+      d->fxState[1].fx   = Ifx_Write;
+   else
+      d->fxState[1].fx   = Ifx_Modify;
+
+   stmt( IRStmt_Dirty(d) );
+   {
+      const HChar* opsuf;
+      switch (opc) {
+         case 0xDC: opsuf = "enc"; break;
+         case 0XDD: opsuf = "enclast"; break;
+         case 0xDE: opsuf = "dec"; break;
+         case 0xDF: opsuf = "declast"; break;
+         case 0xDB: opsuf = "imc"; break;
+         default: vassert(0);
+      }
+      DIP("aes%s %s,%s\n", opsuf, 
+          (regNoL == 16 ? dis_buf : nameXMMReg(regNoL)),
+          nameXMMReg(regNoR));
+   }
+   return delta;
+}
+
+static Int dis_AESKEYGENASSIST ( UChar sorb, Int delta )
+{
+   IRTemp addr   = IRTemp_INVALID;
+   Int    alen   = 0;
+   HChar  dis_buf[50];
+   UChar  modrm  = getUChar(delta);
+   UInt   regNoL = 0;
+   UInt   regNoR = gregOfRM(modrm);
+   UChar  imm    = 0;
+
+   /* This is a nasty kludge.  See AESENC et al. instructions. */
+   modrm = getUChar(delta);
+   if (epartIsReg(modrm)) {
+      regNoL = eregOfRM(modrm);
+      imm = getUChar(delta+1);
+      delta += 1+1;
+   } else {
+      regNoL = 16; /* use XMM16 as an intermediary */
+      addr = disAMode( &alen, sorb, delta, dis_buf );
+      /* alignment check ???? . */
+      stmt( IRStmt_Put( OFFB_XMM16, loadLE(Ity_V128, mkexpr(addr)) ));
+      imm = getUChar(delta+alen);
+      delta += alen+1;
+   }
+
+   /* Who ya gonna call?  Presumably not Ghostbusters. */
+   void*  fn = &x86g_dirtyhelper_AESKEYGENASSIST;
+   const HChar* nm = "x86g_dirtyhelper_AESKEYGENASSIST";
+
+   /* Round up the arguments.  Note that this is a kludge -- the
+      use of mkU32 rather than mkIRExpr_HWord implies the
+      assumption that the host's word size is 32-bit. */
+   UInt gstOffL = regNoL == 16 ? OFFB_XMM16 : xmmGuestRegOffset(regNoL);
+   UInt gstOffR = xmmGuestRegOffset(regNoR);
+
+   IRExpr*  imme         = mkU32(imm & 0xFF);
+   IRExpr*  gstOffLe     = mkU32(gstOffL);
+   IRExpr*  gstOffRe     = mkU32(gstOffR);
+   IRExpr** args
+      = mkIRExprVec_4( IRExpr_GSPTR(), imme, gstOffLe, gstOffRe );
+
+   IRDirty* d    = unsafeIRDirty_0_N( 0/*regparms*/, nm, fn, args );
+   /* It's not really a dirty call, but we can't use the clean helper
+      mechanism here for the very lame reason that we can't pass 2 x
+      V128s by value to a helper.  Hence this roundabout scheme. */
+   d->nFxState = 2;
+   vex_bzero(&d->fxState, sizeof(d->fxState));
+   d->fxState[0].fx     = Ifx_Read;
+   d->fxState[0].offset = gstOffL;
+   d->fxState[0].size   = sizeof(U128);
+   d->fxState[1].fx     = Ifx_Write;
+   d->fxState[1].offset = gstOffR;
+   d->fxState[1].size   = sizeof(U128);
+   stmt( IRStmt_Dirty(d) );
+
+   DIP("aeskeygenassist $%x,%s,%s\n", (UInt)imm,
+       (regNoL == 16 ? dis_buf : nameXMMReg(regNoL)),
+       nameXMMReg(regNoR));
+   return delta;
+}
+
+
 __attribute__((noinline))
 static
 Int dis_ESC_0F38__SSE4 ( Bool* decode_OK,
@@ -9201,6 +9344,23 @@ Int dis_ESC_0F38__SSE4 ( Bool* decode_OK,
          delta = dis_PHMINPOSUW_128( sorb, delta );
          goto decode_success;
       } 
+      break;
+
+   case 0xDC:
+   case 0xDD:
+   case 0xDE:
+   case 0xDF:
+   case 0xDB:
+      /* 66 0F 38 DC /r = AESENC xmm1, xmm2/m128
+                  DD /r = AESENCLAST xmm1, xmm2/m128
+                  DE /r = AESDEC xmm1, xmm2/m128
+                  DF /r = AESDECLAST xmm1, xmm2/m128
+
+                  DB /r = AESIMC xmm1, xmm2/m128 */
+      if (!haveF2 && sz == 2) {
+         delta = dis_AESx( sorb, delta, opc );
+         goto decode_success;
+      }
       break;
 
    case 0xF0:
@@ -10582,6 +10742,14 @@ Int dis_ESC_0F3A__SSE4 ( Bool* decode_OK,
          delta = dis_PCMPxSTRx( sorb, delta, opc );
          if (delta > delta0) goto decode_success;
          /* else fall though; dis_PCMPxSTRx failed to decode it */
+      }
+      break;
+
+   case 0xDF:
+      /* 66 0F 3A DF /r ib = AESKEYGENASSIST imm8, xmm2/m128, xmm1 */
+      if (sz == 2) {
+         delta = dis_AESKEYGENASSIST( sorb, delta );
+         goto decode_success;
       }
       break;
 

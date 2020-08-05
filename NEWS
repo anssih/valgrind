@@ -12,7 +12,7 @@ support for X86/macOS 10.13, AMD64/macOS 10.13 and nanoMIPS/Linux.
 
 * ==================== CORE CHANGES ===================
 
-* x86: Support for SSE4 in 32-bit mode has been added.
+* x86: Support for SSE4, AES in 32-bit mode has been added.
 
 * ==================== TOOL CHANGES ====================
 
@@ -44,6 +44,7 @@ where XXXXXX is the bug number as listed below.
 254616  unknown instruction and aborts on Mac OS X 10.6.4 [..]
 276780  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0x22
 291924  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x38 0x31 (pmovzxbd)
+303804  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0xDF
 345077  linux syscall execveat support (linux 3.19)
 346023  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0xB (roundsd)
 347198  vex x86->IR: unhandled instruction bytes: 0x66 0xF 0x3A 0x63 (pcmpistri)

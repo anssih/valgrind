@@ -33,6 +33,7 @@ endif
 
 EXTRA_DIST = \
 	aad_aam.stdout.exp aad_aam.stderr.exp aad_aam.vgtest \
+	aes.vgtest aes.stdout.exp aes.stderr.exp \
 	badseg.stderr.exp badseg.stdout.exp badseg.stdout.exp-solaris \
 	badseg.vgtest \
 	bswapw.stderr.exp bswapw.stdout.exp bswapw.vgtest \
@@ -138,7 +139,7 @@ if BUILD_MOVBE_TESTS
 endif
 if BUILD_SSE42_TESTS
  check_PROGRAMS += \
-	pcmpstr pcmpxstrx sse4 crc32 \
+	pcmpstr pcmpxstrx sse4 crc32 aes \
 	pcmpstrw pcmpxstrxw
 endif
 if !VGCONF_OS_IS_DARWIN
