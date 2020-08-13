@@ -5365,6 +5365,104 @@ struct vki_itimerspec64 {
 
 #define VKI_RLIM64_INFINITY (~0ULL)
 
+//----------------------------------------------------------------------
+// From Vivante hal/kernel/inc/gc_hal_*.h
+//----------------------------------------------------------------------
+
+#define VKI_VIV_IOCTL_GCHAL_INTERFACE 30000
+
+struct VKI_VIV_DRIVER_ARGS {
+    __vki_u64 InputBuffer;
+    __vki_u64 InputBufferSize;
+    __vki_u64 OutputBuffer;
+    __vki_u64 OutputBufferSize;
+};
+
+#define VKI_VIV_gcvHAL_ALLOCATE_NON_PAGED_MEMORY        2
+#define VKI_VIV_gcvHAL_FREE_NON_PAGED_MEMORY            3
+#define VKI_VIV_gcvHAL_ALLOCATE_CONTIGUOUS_MEMORY       4
+#define VKI_VIV_gcvHAL_FREE_CONTIGUOUS_MEMORY           5
+#define VKI_VIV_gcvHAL_MAP_MEMORY                       9
+#define VKI_VIV_gcvHAL_UNMAP_MEMORY                     10
+#define VKI_VIV_gcvHAL_MAP_USER_MEMORY                  11
+#define VKI_VIV_gcvHAL_UNMAP_USER_MEMORY                12
+#define VKI_VIV_gcvHAL_LOCK_VIDEO_MEMORY                13
+#define VKI_VIV_gcvHAL_UNLOCK_VIDEO_MEMORY              14
+#define VKI_VIV_gcvHAL_ALLOCATE_VIRTUAL_COMMAND_BUFFER  49
+#define VKI_VIV_gcvHAL_FREE_VIRTUAL_COMMAND_BUFFER      50
+
+struct VKI_VIV_gcsHAL_INTERFACE {
+    int command;
+    int hardwareType;
+    int status;
+    __vki_u64 handle;
+    __vki_u32 pid;
+
+    union {
+        struct {
+            __vki_u32 physical;
+            __vki_u64 bytes;
+            __vki_u64 logical;
+        } MapMemory;
+
+        struct {
+            __vki_u32 node;
+            int cacheable;
+            __vki_u32 address;
+            __vki_u64 memory;
+            __vki_u32 gid;
+            __vki_u64 physicalAddress;
+        } LockVideoMemory;
+
+        struct {
+            __vki_u64 node;
+            int type;
+            int asynchroneous;
+        } UnlockVideoMemory;
+
+        struct {
+            __vki_u64 bytes;
+            __vki_u32 physical;
+            __vki_u64 logical;
+        } AllocateNonPagedMemory;
+
+        struct {
+            __vki_u64 memory;
+            __vki_u32 physical;
+            __vki_u64 size;
+            __vki_u32 info;
+            __vki_u32 address;
+        } MapUserMemory;
+
+        struct {
+            __vki_u64 bytes;
+            __vki_u32 address;
+            __vki_u32 physical;
+            __vki_u64 logical;
+        } AllocateContiguousMemory;
+
+        struct {
+            __vki_u64 bytes;
+            __vki_u32 physical;
+            __vki_u64 logical;
+        } FreeContiguousMemory;
+
+        struct {
+            __vki_u32 context;
+            __vki_u64 maxState;
+            __vki_u64 numStates;
+            int map;
+            __vki_u32 physicals[2];
+            __vki_u64 logicals[2];
+            __vki_u32 bytes;
+        } Attach;
+
+        struct {
+            __vki_u32 context;
+        } Detach;
+    } u;
+};
+
 /*--------------------------------------------------------------------*/
 /*--- end                                                          ---*/
 /*--------------------------------------------------------------------*/

@@ -10149,6 +10149,14 @@ PRE(sys_ioctl)
       break;
    }
 
+   case VKI_VIV_IOCTL_GCHAL_INTERFACE: {
+      struct VKI_VIV_DRIVER_ARGS *data =
+         (struct VKI_VIV_DRIVER_ARGS *)(Addr)ARG3;
+      PRE_MEM_WRITE("ioctl(GCHAL_INTERFACE).OutputBuffer",
+                    (Addr)data->OutputBuffer, data->OutputBufferSize);
+      break;
+   }
+
    default:
       /* EVIOC* are variable length and return size written on success */
       switch (ARG2 & ~(_VKI_IOC_SIZEMASK << _VKI_IOC_SIZESHIFT)) {
@@ -12238,6 +12246,50 @@ POST(sys_ioctl)
    case VKI_PTP_ENABLE_PPS:
    case VKI_PTP_PIN_SETFUNC:
       break;
+
+   case VKI_VIV_IOCTL_GCHAL_INTERFACE: {
+      struct VKI_VIV_DRIVER_ARGS *data =
+         (struct VKI_VIV_DRIVER_ARGS *)(Addr)ARG3;
+      POST_MEM_WRITE((Addr)data->OutputBuffer, data->OutputBufferSize);
+      if (data->OutputBufferSize >= sizeof(struct VKI_VIV_gcsHAL_INTERFACE)) {
+         struct VKI_VIV_gcsHAL_INTERFACE *iface =
+            (struct VKI_VIV_gcsHAL_INTERFACE *)(Addr)data->OutputBuffer;
+
+         switch (iface->command) {
+         case VKI_VIV_gcvHAL_ALLOCATE_NON_PAGED_MEMORY:
+         case VKI_VIV_gcvHAL_ALLOCATE_VIRTUAL_COMMAND_BUFFER:
+            VG_TRACK(new_mem_mmap, iface->u.AllocateNonPagedMemory.logical,
+                     iface->u.AllocateNonPagedMemory.bytes, True, True, False, 0);
+            break;
+         case VKI_VIV_gcvHAL_FREE_NON_PAGED_MEMORY:
+         case VKI_VIV_gcvHAL_FREE_VIRTUAL_COMMAND_BUFFER:
+            VG_TRACK(die_mem_munmap, iface->u.AllocateNonPagedMemory.logical,
+                     iface->u.AllocateNonPagedMemory.bytes);
+            break;
+         case VKI_VIV_gcvHAL_ALLOCATE_CONTIGUOUS_MEMORY:
+            VG_TRACK(new_mem_mmap, iface->u.AllocateContiguousMemory.logical,
+                     iface->u.AllocateContiguousMemory.bytes, True, True, False, 0);
+            break;
+         case VKI_VIV_gcvHAL_FREE_CONTIGUOUS_MEMORY:
+            VG_TRACK(die_mem_munmap, iface->u.FreeContiguousMemory.logical,
+                     iface->u.FreeContiguousMemory.bytes);
+            break;
+         case VKI_VIV_gcvHAL_MAP_MEMORY:
+            VG_TRACK(new_mem_mmap, iface->u.MapMemory.logical,
+                     iface->u.MapMemory.bytes, True, True, False, 0);
+            POST_MEM_WRITE((Addr)iface->u.MapMemory.logical,
+                           iface->u.MapMemory.bytes);
+            break;
+         case VKI_VIV_gcvHAL_UNMAP_MEMORY:
+            VG_TRACK(die_mem_munmap, iface->u.MapMemory.logical,
+                     iface->u.MapMemory.bytes);
+            break;
+         default:
+            break;
+         }
+      }
+      break;
+   }
 
    default:
       /* EVIOC* are variable length and return size written on success */
